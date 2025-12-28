@@ -77,12 +77,12 @@ export default function AdminPage() {
   }
 
   // auto-refresh cada 10s cuando está logeado
-  useEffect(() => {
-    if (!authed) return
-    const t = setInterval(() => {
-      fetchStatus()
-    }, 10000)
-    return () => clearInterval(t)
+  //useEffect(() => {
+   // if (!authed) return
+    //const t = setInterval(() => {
+    //  fetchStatus()
+    //}, 10000)
+    //return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed])
 
