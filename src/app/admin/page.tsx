@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 type ReleaseRow = {
   campaign_id: string
@@ -76,24 +76,24 @@ export default function AdminPage() {
     }
   }
 
-  // auto-refresh cada 10s cuando está logeado
-  //useEffect(() => {
-   // if (!authed) return
-    //const t = setInterval(() => {
-    //  fetchStatus()
-    //}, 10000)
-    //return () => clearInterval(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed])
+  // Si quieres auto-refresh, lo ponemos bien (por ahora lo dejamos OFF para no molestar)
+  // useEffect(() => {
+  //   if (!authed) return
+  //   const t = window.setInterval(() => {
+  //     const active = document.activeElement
+  //     const isTyping =
+  //       active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || (active as any)?.isContentEditable
+  //     if (!isTyping && !loading) void fetchStatus()
+  //   }, 30000)
+  //   return () => window.clearInterval(t)
+  // }, [authed, loading])
 
   return (
     <div style={pageStyle}>
       <div style={cardStyle}>
         <div style={{ display: 'grid', gap: 6, marginBottom: 14 }}>
           <div style={{ fontWeight: 900, letterSpacing: 1, opacity: 0.9 }}>SUBARU • PANEL STAFF</div>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
-            Control de mochilas (ventana) + conteos del día.
-          </div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>Control de mochilas (ventana) + conteos del día.</div>
         </div>
 
         {!authed && (
@@ -105,11 +105,7 @@ export default function AdminPage() {
               onChange={(e) => setPin(e.target.value)}
               inputMode="numeric"
             />
-            <button
-              style={btnPrimary(canAuth && !loading)}
-              disabled={!canAuth || loading}
-              onClick={fetchStatus}
-            >
+            <button style={btnPrimary(canAuth && !loading)} disabled={!canAuth || loading} onClick={fetchStatus}>
               {loading ? 'Cargando…' : 'Entrar'}
             </button>
             {err && <div style={errStyle}>⚠️ {err}</div>}
@@ -130,24 +126,24 @@ export default function AdminPage() {
                 <Stat label="Tragamonedas" value={counts?.SLOTS ?? '-'} />
                 <Stat label="Sigue" value={counts?.TRY_AGAIN ?? '-'} />
               </div>
+
               <button style={btnGhost(!loading)} disabled={loading} onClick={fetchStatus}>
                 🔄 Actualizar
               </button>
             </div>
 
+            {/* Probabilidades editables */}
+            <PrizeWeightsEditor pin={pin} />
+
+            {/* Ventana Mochila */}
             <div style={sectionStyle}>
               <div style={hStyle}>Ventana Mochila (forzar dentro de N jugadas válidas)</div>
 
               <div style={{ display: 'grid', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                   <div style={{ opacity: 0.85 }}>
-                    Estado actual:{' '}
-                    <b>
-                      {release?.is_enabled ? 'ACTIVA' : 'INACTIVA'}
-                    </b>
-                    {' • '}
-                    Restantes:{' '}
-                    <b>{release?.remaining_spins ?? '-'}</b>
+                    Estado actual: <b>{release?.is_enabled ? 'ACTIVA' : 'INACTIVA'}</b> {' • '}
+                    Restantes: <b>{release?.remaining_spins ?? '-'}</b>
                   </div>
                 </div>
 
@@ -162,29 +158,17 @@ export default function AdminPage() {
                     disabled={loading}
                     placeholder="10"
                   />
-                  <button
-                    style={btnPrimary(!loading)}
-                    disabled={loading}
-                    onClick={() => setReleaseWindow(true, remaining)}
-                  >
+                  <button style={btnPrimary(!loading)} disabled={loading} onClick={() => setReleaseWindow(true, remaining)}>
                     🎒 Activar en próximas {remaining || 10} jugadas
                   </button>
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button
-                    style={btnWarn(!loading)}
-                    disabled={loading}
-                    onClick={() => setReleaseWindow(false, 0)}
-                  >
+                  <button style={btnWarn(!loading)} disabled={loading} onClick={() => setReleaseWindow(false, 0)}>
                     ⛔ Desactivar / Cancelar
                   </button>
 
-                  <button
-                    style={btnGhost(!loading)}
-                    disabled={loading}
-                    onClick={() => setReleaseWindow(true, 10)}
-                  >
+                  <button style={btnGhost(!loading)} disabled={loading} onClick={() => setReleaseWindow(true, 10)}>
                     ⚡ Activar “rápido” (10)
                   </button>
                 </div>
@@ -329,4 +313,147 @@ const errStyle: React.CSSProperties = {
   background: 'rgba(255, 60, 90, 0.16)',
   border: '1px solid rgba(255, 60, 90, 0.35)',
   fontWeight: 800,
+}
+
+/** Editor de probabilidades */
+function PrizeWeightsEditor({ pin }: { pin: string }) {
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  type Row = { game_type: 'wheel' | 'slots'; prize_key: string; weight: number }
+  const [rows, setRows] = useState<Row[]>([])
+
+  const wheelKeys = ['BACKPACK', 'WATER', 'LANYARD', 'BLANKET', 'TRY_AGAIN']
+  const slotsKeys = ['BACKPACK', 'WATER', 'LANYARD', 'TRY_AGAIN']
+
+  async function load() {
+    setLoading(true)
+    setErr(null)
+    setMsg(null)
+    try {
+      const r = await fetch('/api/admin/prize-weights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, action: 'get' }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data?.error ?? 'Error')
+
+      const map = new Map<string, number>()
+      for (const it of data.items ?? []) map.set(`${it.game_type}:${it.prize_key}`, Number(it.weight || 0))
+
+      const merged: Row[] = []
+      for (const k of wheelKeys) merged.push({ game_type: 'wheel', prize_key: k, weight: map.get(`wheel:${k}`) ?? 0 })
+      for (const k of slotsKeys) merged.push({ game_type: 'slots', prize_key: k, weight: map.get(`slots:${k}`) ?? 0 })
+      setRows(merged)
+    } catch (e: any) {
+      setErr(e?.message ?? 'Error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function save() {
+    setLoading(true)
+    setErr(null)
+    setMsg(null)
+    try {
+      const r = await fetch('/api/admin/prize-weights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, action: 'save', items: rows }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data?.error ?? 'Error')
+      setMsg('✅ Probabilidades guardadas')
+    } catch (e: any) {
+      setErr(e?.message ?? 'Error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const wheelSum = rows.filter((r) => r.game_type === 'wheel').reduce((s, r) => s + (Number(r.weight) || 0), 0)
+  const slotsSum = rows.filter((r) => r.game_type === 'slots').reduce((s, r) => s + (Number(r.weight) || 0), 0)
+
+  function setWeight(game_type: 'wheel' | 'slots', prize_key: string, value: number) {
+    setRows((prev) =>
+      prev.map((r) => (r.game_type === game_type && r.prize_key === prize_key ? { ...r, weight: value } : r))
+    )
+  }
+
+  return (
+    <div style={sectionStyle}>
+      <div style={hStyle}>Probabilidades (editables)</div>
+      <div style={{ fontSize: 12, opacity: 0.7 }}>
+        Se guardan como “pesos”. Puedes tratarlos como % si haces que sumen 100.
+        <br />
+        * Manta (BLANKET) solo existe en Ruleta.
+      </div>
+
+      <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ fontWeight: 900, opacity: 0.9 }}>🎡 Ruleta (wheel) • Suma: {wheelSum}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
+            {wheelKeys.map((k) => {
+              const row = rows.find((r) => r.game_type === 'wheel' && r.prize_key === k)!
+              return (
+                <div key={`wheel-${k}`} style={{ display: 'contents' }}>
+                  <div style={{ opacity: 0.9, padding: '10px 0' }}>{k}</div>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    step="0.1"
+                    value={row?.weight ?? 0}
+                    onChange={(e) => setWeight('wheel', k, Number(e.target.value || 0))}
+                    disabled={loading}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ fontWeight: 900, opacity: 0.9 }}>🎰 Tragamonedas (slots) • Suma: {slotsSum}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
+            {slotsKeys.map((k) => {
+              const row = rows.find((r) => r.game_type === 'slots' && r.prize_key === k)!
+              return (
+                <div key={`slots-${k}`} style={{ display: 'contents' }}>
+                  <div style={{ opacity: 0.9, padding: '10px 0' }}>{k}</div>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    step="0.1"
+                    value={row?.weight ?? 0}
+                    onChange={(e) => setWeight('slots', k, Number(e.target.value || 0))}
+                    disabled={loading}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button style={btnGhost(!loading)} disabled={loading} onClick={load}>
+            🔄 Recargar
+          </button>
+          <button style={btnPrimary(!loading)} disabled={loading} onClick={save}>
+            💾 Guardar
+          </button>
+        </div>
+
+        {msg && <div style={okStyle}>{msg}</div>}
+        {err && <div style={errStyle}>⚠️ {err}</div>}
+      </div>
+    </div>
+  )
 }

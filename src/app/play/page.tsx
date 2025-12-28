@@ -179,7 +179,7 @@ export default function PlayPage() {
         display: 'grid',
         placeItems: 'center',
         color: '#fff',
-        backgroundImage: `linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.75)), url(/assets/fondo.jpg)`,
+        backgroundImage: `linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.75)), url(/assets/fondo2.jpg)`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
@@ -201,7 +201,7 @@ export default function PlayPage() {
         {/* Título imagen evento */}
         <div style={{ display: 'grid', placeItems: 'center', marginBottom: 8 }}>
           <Image
-            src="/assets/titulo-evento.png"
+            src="/assets/titulo-evento2.png"
             alt="Título evento"
             width={420}
             height={120}
@@ -353,7 +353,7 @@ export default function PlayPage() {
                       <div
                         style={{
                           fontWeight: 800,
-                          fontSize: 14,
+                          fontSize: 0,
                           letterSpacing: 0.2,
                           lineHeight: 1.1,
                           textShadow: '0 2px 10px rgba(0,0,0,0.65)',

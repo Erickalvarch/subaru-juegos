@@ -3,12 +3,18 @@
 import Image from 'next/image'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-type Prize = 'BACKPACK' | 'WATER' | 'TRY_AGAIN'
+/**
+ * PREMIOS POSIBLES (desde backend)
+ * - Slots: BACKPACK, WATER, LANYARD, TRY_AGAIN
+ * - BLANKET existe solo en Ruleta, pero aquí NO la usamos.
+ */
+type Prize = 'BACKPACK' | 'WATER' | 'LANYARD' | 'TRY_AGAIN'
 type ApiResp = { result?: Prize; error?: string }
 
 const SYMBOLS: Array<{ key: Prize; label: string; icon: string }> = [
   { key: 'BACKPACK', label: 'Mochila', icon: '/assets/icon-mochila.png' },
   { key: 'WATER', label: 'Agua', icon: '/assets/icon-agua.png' },
+  { key: 'LANYARD', label: 'Lanyard', icon: '/assets/lanyard.png' },
   { key: 'TRY_AGAIN', label: 'Sigue participando', icon: '/assets/icon-sigue.png' },
 ]
 
@@ -117,8 +123,7 @@ export default function SlotsPage() {
       randomReels()
       const t = Date.now() - start
       if (t > 3800) {
-        // últimos segundos: se ve más “pesado”
-        // (sin complicar interval variable)
+        // últimos segundos: se ve más “pesado” (sin complicar)
       }
     }, 80)
 
@@ -151,7 +156,7 @@ export default function SlotsPage() {
 
       const idx = Math.max(0, prizeToSymbolIndex(prize))
 
-      // Antes del stop, marcamos fase “stopping” para bajar blur/velocidad visual
+      // fase stopping
       window.setTimeout(() => setSpinPhase('stopping'), SPIN_MS - 800)
 
       window.setTimeout(() => {
@@ -163,11 +168,14 @@ export default function SlotsPage() {
         setSpinning(false)
         setSpinPhase('idle')
 
+        // Glow fuerte solo para Mochila
         if (prize === 'BACKPACK') {
           setGlow(true)
           window.setTimeout(() => setGlow(false), 2400)
         }
-        if (prize === 'BACKPACK' || prize === 'WATER') {
+
+        // Confetti para premios “reales” (incluye LANYARD)
+        if (prize === 'BACKPACK' || prize === 'WATER' || prize === 'LANYARD') {
           fireConfetti()
         }
       }, SPIN_MS)
@@ -187,9 +195,13 @@ export default function SlotsPage() {
       ? '¡Ganaste Mochila!'
       : result === 'WATER'
       ? 'Ganaste Agua'
+      : result === 'LANYARD'
+      ? 'Ganaste Lanyard'
       : result === 'TRY_AGAIN'
       ? 'Sigue participando'
       : null
+
+  const resultEmoji = result === 'BACKPACK' ? '🎒' : result === 'WATER' ? '💧' : result === 'LANYARD' ? '🎟️' : '🙌'
 
   return (
     <div
@@ -203,7 +215,7 @@ export default function SlotsPage() {
           radial-gradient(circle at 20% 10%, rgba(30,136,229,0.28), rgba(0,0,0,0) 45%),
           radial-gradient(circle at 80% 30%, rgba(255,255,255,0.10), rgba(0,0,0,0) 40%),
           linear-gradient(rgba(0,0,0,.65), rgba(0,0,0,.88)),
-          url(/assets/fondo.jpg)
+          url(/assets/fondo2.jpg)
         `,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -228,7 +240,7 @@ export default function SlotsPage() {
           <div />
           <div style={{ display: 'grid', placeItems: 'center', gap: 8 }}>
             <Image
-              src="/assets/titulo-evento.png"
+              src="/assets/titulo-evento2.png"
               alt="Título evento"
               width={520}
               height={140}
@@ -284,7 +296,7 @@ export default function SlotsPage() {
           </button>
         </div>
 
-        {/* Slot Machine (CENTRAL como imagen ref) */}
+        {/* Slot Machine */}
         <div style={{ marginTop: 18, display: 'grid', placeItems: 'center' }}>
           <div
             style={{
@@ -292,7 +304,6 @@ export default function SlotsPage() {
               position: 'relative',
               padding: 18,
               borderRadius: 28,
-              // Marco “azul neon / chrome”
               background: `
                 linear-gradient(180deg, rgba(35,144,255,0.40), rgba(2,18,45,0.65)),
                 radial-gradient(circle at 20% 10%, rgba(255,255,255,0.22), rgba(0,0,0,0) 40%),
@@ -303,21 +314,17 @@ export default function SlotsPage() {
               overflow: 'hidden',
             }}
           >
-            {/* luces */}
             <div style={lightsTopStyle} />
             <div style={lightsBottomStyle} />
 
-            {/* Palanca derecha */}
             <Lever active={spinning} />
 
-            {/* Glow extra cuando mochila */}
             {glow && <div style={glowStyle} />}
 
-            {/* Ventana “vidrio” */}
             <div
               style={{
                 position: 'relative',
-                marginRight: 64, // deja espacio palanca
+                marginRight: 64,
                 borderRadius: 22,
                 padding: 16,
                 background: 'rgba(255,255,255,0.08)',
@@ -326,7 +333,6 @@ export default function SlotsPage() {
                 overflow: 'hidden',
               }}
             >
-              {/* Reflejo vidrio */}
               <div
                 style={{
                   position: 'absolute',
@@ -339,7 +345,6 @@ export default function SlotsPage() {
                 }}
               />
 
-              {/* Reels */}
               <div
                 style={{
                   position: 'relative',
@@ -353,7 +358,6 @@ export default function SlotsPage() {
                 <ReelGlass symbol={SYMBOLS[reels[2]]} phase={spinPhase} />
               </div>
 
-              {/* Sombra central / foco */}
               <div
                 style={{
                   position: 'absolute',
@@ -368,14 +372,6 @@ export default function SlotsPage() {
               />
             </div>
 
-            {/* Monedas y destellos decorativos 
-            <Coin x="8%" y="18%" s={42} r={-12} />
-            <Coin x="84%" y="16%" s={34} r={16} />
-            <Coin x="22%" y="84%" s={30} r={8} />
-            <Sparkle x="76%" y="78%" />
-            <Sparkle x="12%" y="64%" />*/}
-
-            {/* Texto mini inferior dentro de la máquina */}
             <div
               style={{
                 marginTop: 14,
@@ -396,7 +392,6 @@ export default function SlotsPage() {
           </div>
         </div>
 
-        {/* Resultado */}
         {(resultText || error) && (
           <div
             style={{
@@ -410,7 +405,7 @@ export default function SlotsPage() {
           >
             {result && (
               <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: 0.2 }}>
-                {result === 'BACKPACK' ? '🎒' : result === 'WATER' ? '💧' : '🙌'} {resultText}
+                {resultEmoji} {resultText}
               </div>
             )}
             {error && (
@@ -467,7 +462,6 @@ function ReelGlass({
         boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
       }}
     >
-      {/* brillo interno */}
       <div
         style={{
           position: 'absolute',
@@ -476,7 +470,7 @@ function ReelGlass({
           pointerEvents: 'none',
         }}
       />
-      {/* máscara (ventana) */}
+
       <div
         style={{
           width: '100%',
@@ -509,7 +503,6 @@ function ReelGlass({
         </div>
       </div>
 
-      {/* reflejo superior */}
       <div
         style={{
           position: 'absolute',
@@ -541,7 +534,6 @@ function Lever({ active }: { active: boolean }) {
         zIndex: 3,
       }}
     >
-      {/* varilla */}
       <div
         style={{
           width: 12,
@@ -555,7 +547,6 @@ function Lever({ active }: { active: boolean }) {
           animation: active ? 'leverPull 0.55s ease-in-out 1' : 'none',
         }}
       >
-        {/* bola */}
         <div
           style={{
             position: 'absolute',
@@ -573,7 +564,6 @@ function Lever({ active }: { active: boolean }) {
         />
       </div>
 
-      {/* base */}
       <div
         style={{
           marginTop: 10,
@@ -586,45 +576,6 @@ function Lever({ active }: { active: boolean }) {
         }}
       />
     </div>
-  )
-}
-
-function Coin({ x, y, s, r }: { x: string; y: string; s: number; r: number }) {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: x,
-        top: y,
-        width: s,
-        height: s,
-        borderRadius: '50%',
-        transform: `rotate(${r}deg)`,
-        background:
-          'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,215,0,0.85) 40%, rgba(120,60,0,0.85))',
-        boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
-        border: '1px solid rgba(255,255,255,0.20)',
-        opacity: 0.9,
-      }}
-    />
-  )
-}
-
-function Sparkle({ x, y }: { x: string; y: string }) {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: x,
-        top: y,
-        width: 26,
-        height: 26,
-        background:
-          'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.0) 70%)',
-        filter: 'drop-shadow(0 10px 25px rgba(35,144,255,0.35))',
-        opacity: 0.85,
-      }}
-    />
   )
 }
 
