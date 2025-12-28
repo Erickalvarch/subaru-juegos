@@ -1,66 +1,44 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import Link from 'next/link'
 
 export default function Home() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main style={{
+      minHeight: '100vh',
+      display: 'grid',
+      placeItems: 'center',
+      padding: 18,
+      background: '#000',
+      color: '#fff'
+    }}>
+      <div style={{ width: '100%', maxWidth: 520, textAlign: 'center' }}>
+        <h1 style={{ marginBottom: 18 }}>Subaru - Juegos</h1>
+
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Link href="/play" style={btn}>🎡 Ruleta (Móvil)</Link>
+          <Link href="/slots" style={btn}>🎰 Tragamonedas (Notebook)</Link>
+          <Link href="/admin" style={btn2}>🧑‍💼 Panel Staff</Link>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+
+        <p style={{ marginTop: 16, opacity: 0.7, fontSize: 12 }}>
+          Stand Subaru • 8 al 17 de enero • 1 participación por persona
+        </p>
+      </div>
+    </main>
+  )
+}
+
+const btn: React.CSSProperties = {
+  display: 'block',
+  padding: 16,
+  borderRadius: 14,
+  textDecoration: 'none',
+  color: '#fff',
+  fontWeight: 900,
+  background: 'linear-gradient(180deg, #1E88E5 0%, #0B3D91 100%)',
+  border: '1px solid rgba(255,255,255,0.18)',
+}
+
+const btn2: React.CSSProperties = {
+  ...btn,
+  background: 'rgba(255,255,255,0.10)',
 }
