@@ -368,12 +368,12 @@ export default function SlotsPage() {
               />
             </div>
 
-            {/* Monedas y destellos decorativos */}
+            {/* Monedas y destellos decorativos 
             <Coin x="8%" y="18%" s={42} r={-12} />
             <Coin x="84%" y="16%" s={34} r={16} />
             <Coin x="22%" y="84%" s={30} r={8} />
             <Sparkle x="76%" y="78%" />
-            <Sparkle x="12%" y="64%" />
+            <Sparkle x="12%" y="64%" />*/}
 
             {/* Texto mini inferior dentro de la máquina */}
             <div
