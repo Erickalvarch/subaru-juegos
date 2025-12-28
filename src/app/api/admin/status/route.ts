@@ -45,16 +45,16 @@ export async function POST(req: Request) {
     const to = `${today}T23:59:59.999`
 
     const { data: plays, error: playsError } = await supabase
-      .from('play')
+      .from('plays')
       .select('result, game_type, created_at')
       .eq('campaign_id', CAMPAIGN_ID)
       .gte('created_at', from)
       .lte('created_at', to)
 
     if (playsError) {
-      // Si tu tabla no se llama "play", aquí saldrá error.
+      // Si tu tabla no se llama "plays", aquí saldrá error.
       return NextResponse.json({
-        error: `No pude leer tabla "play". Si tu tabla se llama distinto, dime el nombre exacto. Detalle: ${playsError.message}`
+        error: `No pude leer tabla "plays". Si tu tabla se llama distinto, dime el nombre exacto. Detalle: ${playsError.message}`
       }, { status: 500 })
     }
 
