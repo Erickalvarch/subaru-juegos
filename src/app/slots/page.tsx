@@ -9,7 +9,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
  * - BLANKET existe solo en Ruleta, pero aquí NO la usamos.
  */
 type Prize = 'BACKPACK' | 'WATER' | 'LANYARD' | 'TRY_AGAIN'
-type ApiResp = { result?: Prize; error?: string }
+
+type ApiResp =
+  | { ok: true; result: Prize }
+  | { ok: false; reason: 'ALREADY_PLAYED'; message: string }
+  | { ok: false; error: string }
 
 const SYMBOLS: Array<{ key: Prize; label: string; icon: string }> = [
   { key: 'BACKPACK', label: 'Mochila', icon: '/assets/icon-mochila.png' },
@@ -27,6 +31,7 @@ export default function SlotsPage() {
   const [busy, setBusy] = useState(false)
   const [spinning, setSpinning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null) // 👈 mensaje “no-error”
   const [result, setResult] = useState<Prize | null>(null)
   const [confettiOn, setConfettiOn] = useState(false)
   const [glow, setGlow] = useState(false)
@@ -111,7 +116,9 @@ export default function SlotsPage() {
     setBusy(true)
     setSpinning(true)
     setSpinPhase('spinning')
+
     setError(null)
+    setInfo(null)
     setResult(null)
     setGlow(false)
 
@@ -131,29 +138,50 @@ export default function SlotsPage() {
       const res = await fetch('/api/play', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, gameType: 'slots' }),
+        body: JSON.stringify({
+          name,
+          email,
+          gameType: 'slots', // ✅ IMPORTANTE
+        }),
       })
+
       const data: ApiResp = await res.json()
 
-      if (!res.ok) {
-        setError(data.error ?? 'Error')
-        stopTicks()
+      // 🟡 Caso: ya participó (NO es error técnico)
+      if (data.ok === false && 'reason' in data && data.reason === 'ALREADY_PLAYED') {
         clearInterval(anim)
+        stopTicks()
+
+        setError(null)
+        setInfo(data.message ?? 'Ya participaste en esta campaña. ¡Gracias por jugar!')
+        setSpinning(false)
+        setSpinPhase('idle')
+        return
+      }
+
+      // 🔴 Errores reales
+      if (!res.ok || (data.ok === false && 'error' in data)) {
+        clearInterval(anim)
+        stopTicks()
+
+        setError('error' in data ? data.error : 'Error al procesar la jugada')
+        setSpinning(false)
+        setSpinPhase('idle')
+        return
+      }
+
+      // 🟢 Caso normal
+      if (data.ok !== true) {
+        clearInterval(anim)
+        stopTicks()
+
+        setError('No llegó resultado desde el servidor')
         setSpinning(false)
         setSpinPhase('idle')
         return
       }
 
       const prize = data.result
-      if (!prize) {
-        setError('No llegó resultado desde el servidor')
-        stopTicks()
-        clearInterval(anim)
-        setSpinning(false)
-        setSpinPhase('idle')
-        return
-      }
-
       const idx = Math.max(0, prizeToSymbolIndex(prize))
 
       // fase stopping
@@ -174,7 +202,7 @@ export default function SlotsPage() {
           window.setTimeout(() => setGlow(false), 2400)
         }
 
-        // Confetti para premios “reales” (incluye LANYARD)
+        // Confetti para premios “reales”
         if (prize === 'BACKPACK' || prize === 'WATER' || prize === 'LANYARD') {
           fireConfetti()
         }
@@ -345,14 +373,7 @@ export default function SlotsPage() {
                 }}
               />
 
-              <div
-                style={{
-                  position: 'relative',
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 1fr',
-                  gap: 14,
-                }}
-              >
+              <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
                 <ReelGlass symbol={SYMBOLS[reels[0]]} phase={spinPhase} />
                 <ReelGlass symbol={SYMBOLS[reels[1]]} phase={spinPhase} />
                 <ReelGlass symbol={SYMBOLS[reels[2]]} phase={spinPhase} />
@@ -392,7 +413,7 @@ export default function SlotsPage() {
           </div>
         </div>
 
-        {(resultText || error) && (
+        {(resultText || error || info) && (
           <div
             style={{
               marginTop: 14,
@@ -408,11 +429,19 @@ export default function SlotsPage() {
                 {resultEmoji} {resultText}
               </div>
             )}
+
+            {info && (
+              <div style={{ fontSize: 16, fontWeight: 900 }}>
+                ✅ {info}
+              </div>
+            )}
+
             {error && (
               <div style={{ fontSize: 16 }}>
                 <b>Error:</b> {error}
               </div>
             )}
+
             <div style={{ marginTop: 8, opacity: 0.75, fontSize: 12 }}>
               * Premios sujetos a stock diario y validación en stand.
             </div>
@@ -492,13 +521,7 @@ function ReelGlass({
           height={130}
           style={{ width: 130, height: 130, objectFit: 'contain' }}
         />
-        <div
-          style={{
-            fontWeight: 950,
-            fontSize: 22,
-            textShadow: '0 2px 12px rgba(0,0,0,0.7)',
-          }}
-        >
+        <div style={{ fontWeight: 950, fontSize: 22, textShadow: '0 2px 12px rgba(0,0,0,0.7)' }}>
           {symbol.label}
         </div>
       </div>

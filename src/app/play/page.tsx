@@ -10,7 +10,6 @@ type ApiResp =
   | { ok: false; reason: 'ALREADY_PLAYED'; message: string }
   | { ok: false; error: string }
 
-
 const prizeLabels: Record<Prize, string> = {
   BACKPACK: 'Mochila',
   WATER: 'Agua',
@@ -38,7 +37,9 @@ export default function PlayPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
+
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null) // 👈 mensaje “no-error”
   const [result, setResult] = useState<Prize | null>(null)
 
   const [rotation, setRotation] = useState(0)
@@ -76,9 +77,6 @@ export default function PlayPage() {
     let interval = 90
     const start = Date.now()
 
-    // Nota: tu implementación original cambia "interval",
-    // pero setInterval no se reprograma solo. Se mantiene igual,
-    // y lo dejamos así porque es tu lógica actual.
     tickTimerRef.current = window.setInterval(() => {
       playTick()
 
@@ -124,11 +122,11 @@ export default function PlayPage() {
   async function play() {
     setLoading(true)
     setError(null)
+    setInfo(null)
     setResult(null)
     setGlow(false)
     setIsSpinning(true)
 
-    // ticks
     startTicks()
 
     try {
@@ -140,32 +138,32 @@ export default function PlayPage() {
 
       const data: ApiResp = await res.json()
 
-// 🟡 CASO: ya participó
-if (data?.reason === 'ALREADY_PLAYED') {
-  setError(null)
-  setMsg(data.message ?? 'Ya participaste en esta campaña. ¡Gracias por jugar!')
-  setIsSpinning(false)
-  stopTicks()
-  return
-}
+      // 🟡 Caso: ya participó (NO es error técnico)
+      if (data.ok === false && 'reason' in data && data.reason === 'ALREADY_PLAYED') {
+        setError(null)
+        setInfo(data.message ?? 'Ya participaste en esta campaña. ¡Gracias por jugar!')
+        setIsSpinning(false)
+        stopTicks()
+        return
+      }
 
-// 🔴 ERRORES REALES
-if (!res.ok || data?.ok === false) {
-  setError(data?.error ?? 'Error al procesar la jugada')
-  setIsSpinning(false)
-  stopTicks()
-  return
-}
+      // 🔴 Errores reales
+      if (!res.ok || (data.ok === false && 'error' in data)) {
+        setError('error' in data ? data.error : 'Error al procesar la jugada')
+        setIsSpinning(false)
+        stopTicks()
+        return
+      }
 
-// 🟢 CASO NORMAL: llegó premio
-const prize = data.result
-if (!prize) {
-  setError('No llegó resultado desde el servidor')
-  setIsSpinning(false)
-  stopTicks()
-  return
-}
+      // 🟢 Caso normal: llegó premio
+      if (data.ok !== true) {
+        setError('No llegó resultado desde el servidor')
+        setIsSpinning(false)
+        stopTicks()
+        return
+      }
 
+      const prize = data.result
 
       spinToPrize(prize)
 
@@ -174,13 +172,11 @@ if (!prize) {
         setResult(prize)
         setIsSpinning(false)
 
-        // Glow solo para Mochila
         if (prize === 'BACKPACK') {
           setGlow(true)
           window.setTimeout(() => setGlow(false), 2400)
         }
 
-        // Confetti para cualquier premio excepto TRY_AGAIN
         if (prize !== 'TRY_AGAIN') {
           fireConfetti()
         }
@@ -235,7 +231,6 @@ if (!prize) {
           boxShadow: '0 18px 60px rgba(0,0,0,0.55)',
         }}
       >
-        {/* Título imagen evento */}
         <div style={{ display: 'grid', placeItems: 'center', marginBottom: 8 }}>
           <Image
             src="/assets/titulo-evento2.png"
@@ -247,7 +242,6 @@ if (!prize) {
           />
         </div>
 
-        {/* Form */}
         <div style={{ display: 'grid', gap: 10 }}>
           <input
             style={inputStyle}
@@ -264,7 +258,6 @@ if (!prize) {
             disabled={loading || isSpinning}
           />
 
-          {/* Botón estilo Subaru */}
           <button
             onClick={play}
             disabled={!canPlay}
@@ -287,16 +280,13 @@ if (!prize) {
             {isSpinning ? 'GIRANDO…' : 'GIRAR'}
           </button>
 
-          {/* Legal */}
           <div style={{ fontSize: 11, opacity: 0.75, lineHeight: 1.35, textAlign: 'center' }}>
             * 1 participación por persona durante la campaña. Premios sujetos a stock diario y disponibilidad del stand.
             Participación válida solo con registro completo. Bases disponibles en el stand.
           </div>
         </div>
 
-        {/* Ruleta */}
         <div style={{ marginTop: 14, position: 'relative', display: 'grid', placeItems: 'center', padding: 8 }}>
-          {/* Flecha */}
           <div
             style={{
               position: 'absolute',
@@ -311,7 +301,6 @@ if (!prize) {
             }}
           />
 
-          {/* Halo (glow) cuando sale mochila */}
           {glow && (
             <div
               style={{
@@ -335,25 +324,20 @@ if (!prize) {
               borderRadius: '50%',
               position: 'relative',
               overflow: 'hidden',
-
               boxShadow: '0 14px 50px rgba(0,0,0,0.6)',
               outline: '1px solid rgba(255,255,255,0.10)',
               outlineOffset: '-10px',
-
               transform: `rotate(${rotation}deg)`,
               transition: isSpinning ? `transform ${SPIN_MS}ms cubic-bezier(0.12, 0.7, 0.1, 1)` : 'none',
-
               background: `conic-gradient(${SEGMENTS.map((s, i) => {
                 const start = i * segmentAngle
                 const end = (i + 1) * segmentAngle
                 return `${s.color} ${start}deg ${end}deg`
               }).join(',')})`,
-
               backfaceVisibility: 'hidden',
               transformStyle: 'preserve-3d',
             }}
           >
-            {/* SOLO ICONOS (sin texto) */}
             {SEGMENTS.map((s, i) => {
               const angle = i * segmentAngle + segmentAngle / 2
 
@@ -371,14 +355,7 @@ if (!prize) {
                   }}
                 >
                   <div style={{ transform: `rotate(${-angle}deg)` }}>
-                    <div
-                      style={{
-                        width: 140,
-                        display: 'grid',
-                        justifyItems: 'center',
-                        textAlign: 'center',
-                      }}
-                    >
+                    <div style={{ width: 140, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
                       <Image
                         src={s.iconSrc}
                         alt=""
@@ -393,7 +370,6 @@ if (!prize) {
               )
             })}
 
-            {/* Centro con logo */}
             <div
               style={{
                 position: 'absolute',
@@ -421,8 +397,7 @@ if (!prize) {
           </div>
         </div>
 
-        {/* Resultado */}
-        {(resultText || error) && (
+        {(resultText || error || info) && (
           <div
             style={{
               marginTop: 12,
@@ -438,6 +413,13 @@ if (!prize) {
                 {resultEmoji} {result === 'TRY_AGAIN' ? resultText : `¡Ganaste ${resultText}!`}
               </div>
             )}
+
+            {info && (
+              <div style={{ fontSize: 16, fontWeight: 800 }}>
+                ✅ {info}
+              </div>
+            )}
+
             {error && (
               <div>
                 <b>Error:</b> {error}
@@ -477,15 +459,7 @@ function ConfettiOverlay() {
   const pieces = Array.from({ length: 90 })
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        pointerEvents: 'none',
-        overflow: 'hidden',
-        zIndex: 9999,
-      }}
-    >
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 9999 }}>
       {pieces.map((_, i) => {
         const left = Math.random() * 100
         const delay = Math.random() * 0.25
