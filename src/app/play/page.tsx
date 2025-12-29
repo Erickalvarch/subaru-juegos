@@ -350,46 +350,54 @@ export default function PlayPage() {
           >
             {/* ✅ Iconos centrados proporcionalmente (sin adivinar px) */}
             {SEGMENTS.map((s, i) => {
-              const angle = -90 + i * segmentAngle + segmentAngle / 2
+  // centro del segmento, tomando en cuenta que arriba es -90°
+  const deg = -90 + i * segmentAngle + segmentAngle / 2
+  const rad = (deg * Math.PI) / 180
 
-              return (
-                <div
-                  key={s.key}
-                  style={{
-                    position: 'absolute',
-                    left: '50%',
-                    top: '50%',
-                    width: 0,
-                    height: 0,
-                    transform: `rotate(${angle}deg) translateY(-${ICON_RADIUS}px)`,
-                    pointerEvents: 'none',
-                    zIndex: 3,
-                  }}
-                >
-                  <div
-                    style={{
-                      transform: `translate(-50%, -50%) rotate(${-angle}deg)`,
-                      display: 'grid',
-                      placeItems: 'center',
-                    }}
-                  >
-                    <Image
-                      src={s.iconSrc}
-                      alt=""
-                      aria-hidden
-                      width={56}
-                      height={56}
-                      style={{
-                        width: 56,
-                        height: 56,
-                        objectFit: 'contain',
-                        filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.6))',
-                      }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
+  // radio "visual" (usa el radio real y baja un poco por el outline/centro)
+  const r = (WHEEL_SIZE / 2) * 0.64
+
+  // coordenadas exactas
+  const x = Math.cos(rad) * r
+  const y = Math.sin(rad) * r
+
+  // compensación fina por tipo de icono (sin adivinar: depende del PNG)
+  const tweak =
+    s.key === 'BACKPACK' ? { dx: 0, dy: -2 } :
+    s.key === 'WATER' ? { dx: 0, dy: -2 } :
+    s.key === 'LANYARD' ? { dx: 0, dy: 2 } :
+    s.key === 'BLANKET' ? { dx: -2, dy: 0 } :
+    { dx: 0, dy: 0 }
+
+  return (
+    <div
+      key={s.key}
+      style={{
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
+        transform: `translate(${x + tweak.dx}px, ${y + tweak.dy}px) translate(-50%, -50%)`,
+        pointerEvents: 'none',
+        zIndex: 3,
+      }}
+    >
+      <Image
+        src={s.iconSrc}
+        alt=""
+        aria-hidden
+        width={56}
+        height={56}
+        style={{
+          width: 56,
+          height: 56,
+          objectFit: 'contain',
+          filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.6))',
+        }}
+      />
+    </div>
+  )
+})}
+
 
             {/* Centro */}
             <div
