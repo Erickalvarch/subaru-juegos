@@ -358,10 +358,10 @@ export default function PlayPage() {
   const baseR = (WHEEL_SIZE / 2) * 0.70
 
 const rFactor =
-  s.key === 'BACKPACK' ? 1.00 :
-  s.key === 'WATER' ? 1.03 :
-  s.key === 'LANYARD' ? 1.20 :
-  s.key === 'BLANKET' ? 0.5 :
+  s.key === 'BACKPACK' ? 1 :
+  s.key === 'WATER' ? 1 :
+  s.key === 'LANYARD' ? 1 :
+  s.key === 'BLANKET' ? 1 :
   1.00
 
 const r = baseR * rFactor
@@ -373,11 +373,11 @@ const r = baseR * rFactor
 
   // compensación fina por tipo de icono (sin adivinar: depende del PNG)
   const tweak =
-    s.key === 'BACKPACK' ? { dx: 0, dy: -2 } :
-    s.key === 'WATER' ? { dx: 0, dy: -2 } :
-    s.key === 'LANYARD' ? { dx: 0, dy: 2 } :
-    s.key === 'BLANKET' ? { dx: -2, dy: 0 } :
-    { dx: 0, dy: 0 }
+    s.key === 'BACKPACK' ? { dx: -30, dy: 0 } :
+    s.key === 'WATER' ? { dx: -10, dy: -30 } :
+    s.key === 'LANYARD' ? { dx: 30, dy: -20 } :
+    s.key === 'BLANKET' ? { dx: 30, dy: 30 } :
+    { dx: -20, dy: 40 }
 
   return (
     <div
