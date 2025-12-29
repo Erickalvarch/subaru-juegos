@@ -36,7 +36,7 @@ const SPIN_MS = 5200
 // ✅ Ruleta (si cambias tamaño, todo se ajusta solo)
 const WHEEL_SIZE = 340
 const WHEEL_RADIUS = WHEEL_SIZE / 2
-const ICON_RADIUS = WHEEL_RADIUS * 0.68 // 0.66–0.70 recomendado
+const ICON_RADIUS = WHEEL_RADIUS * 0.50 // 0.66–0.70 recomendado
 
 export default function PlayPage() {
   const [name, setName] = useState('')
