@@ -342,20 +342,22 @@ export default function PlayPage() {
               const angle = i * segmentAngle + segmentAngle / 2
 
               return (
-                <div
-                  key={s.key}
-                  style={{
-                    position: 'absolute',
-                    left: '50%',
-                    top: '50%',
-                    width: '50%',
-                    transformOrigin: '0% 0%',
-                    transform: `rotate(${angle}deg) translate(26px, -50%)`,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  <div style={{ transform: `rotate(${-angle}deg)` }}>
-                    <div style={{ width: 140, display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
+             <div
+  key={s.key}
+  style={{
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    width: 0,
+    height: 0,
+    transform: `rotate(${angle}deg) translateY(-130px)`,
+    pointerEvents: 'none',
+  }}
+>
+
+                  <div style={{ transform: `translate(-50%, -50%) rotate(${-angle}deg)` }}>
+  <div style={{ width: 140, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+
                       <Image
                         src={s.iconSrc}
                         alt=""
@@ -404,7 +406,9 @@ export default function PlayPage() {
               padding: 14,
               borderRadius: 14,
               border: '1px solid rgba(255,255,255,0.12)',
-              background: 'rgba(255,255,0.06)',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+backdropFilter: 'blur(10px)',
+
               textAlign: 'center',
             }}
           >
@@ -414,11 +418,21 @@ export default function PlayPage() {
               </div>
             )}
 
-            {info && (
-              <div style={{ fontSize: 16, fontWeight: 800 }}>
-                ✅ {info}
-              </div>
-            )}
+         {info && (
+  <div
+    style={{
+      fontSize: 16,
+      fontWeight: 900,
+      padding: '10px 12px',
+      borderRadius: 12,
+      background: 'rgba(11,61,145,0.35)',
+      border: '1px solid rgba(255,255,255,0.16)',
+    }}
+  >
+    ✅ {info}
+  </div>
+)}
+
 
             {error && (
               <div>
