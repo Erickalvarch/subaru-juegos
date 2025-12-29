@@ -355,13 +355,13 @@ export default function PlayPage() {
   const rad = (deg * Math.PI) / 180
 
   // radio "visual" (usa el radio real y baja un poco por el outline/centro)
-  const baseR = (WHEEL_SIZE / 2) * 0.50
+  const baseR = (WHEEL_SIZE / 2) * 0.70
 
 const rFactor =
-  s.key === 'BACKPACK' ? 1.02 :
+  s.key === 'BACKPACK' ? 1.00 :
   s.key === 'WATER' ? 1.03 :
-  s.key === 'LANYARD' ? 1.08 :
-  s.key === 'BLANKET' ? 1.05 :
+  s.key === 'LANYARD' ? 1.20 :
+  s.key === 'BLANKET' ? 0.5 :
   1.00
 
 const r = baseR * rFactor
