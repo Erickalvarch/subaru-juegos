@@ -4,7 +4,12 @@ import Image from 'next/image'
 import { useMemo, useRef, useState } from 'react'
 
 type Prize = 'BACKPACK' | 'WATER' | 'LANYARD' | 'BLANKET' | 'TRY_AGAIN'
-type ApiResp = { result?: Prize; error?: string }
+
+type ApiResp =
+  | { ok: true; result: Prize }
+  | { ok: false; reason: 'ALREADY_PLAYED'; message: string }
+  | { ok: false; error: string }
+
 
 const prizeLabels: Record<Prize, string> = {
   BACKPACK: 'Mochila',
@@ -135,20 +140,32 @@ export default function PlayPage() {
 
       const data: ApiResp = await res.json()
 
-      if (!res.ok) {
-        setError(data.error ?? 'Error')
-        setIsSpinning(false)
-        stopTicks()
-        return
-      }
+// 🟡 CASO: ya participó
+if (data?.reason === 'ALREADY_PLAYED') {
+  setError(null)
+  setMsg(data.message ?? 'Ya participaste en esta campaña. ¡Gracias por jugar!')
+  setIsSpinning(false)
+  stopTicks()
+  return
+}
 
-      const prize = data.result
-      if (!prize) {
-        setError('No llegó resultado desde el servidor')
-        setIsSpinning(false)
-        stopTicks()
-        return
-      }
+// 🔴 ERRORES REALES
+if (!res.ok || data?.ok === false) {
+  setError(data?.error ?? 'Error al procesar la jugada')
+  setIsSpinning(false)
+  stopTicks()
+  return
+}
+
+// 🟢 CASO NORMAL: llegó premio
+const prize = data.result
+if (!prize) {
+  setError('No llegó resultado desde el servidor')
+  setIsSpinning(false)
+  stopTicks()
+  return
+}
+
 
       spinToPrize(prize)
 
