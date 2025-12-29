@@ -36,7 +36,7 @@ const SPIN_MS = 5200
 // ✅ Ruleta (si cambias tamaño, todo se ajusta solo)
 const WHEEL_SIZE = 340
 const WHEEL_RADIUS = WHEEL_SIZE / 2
-const ICON_RADIUS = WHEEL_RADIUS * 0.50 // 0.66–0.70 recomendado
+const ICON_RADIUS = WHEEL_RADIUS * 0.60 // 0.66–0.70 recomendado
 
 export default function PlayPage() {
   const [name, setName] = useState('')
@@ -338,11 +338,12 @@ export default function PlayPage() {
               outlineOffset: '-10px',
               transform: `rotate(${rotation}deg)`,
               transition: isSpinning ? `transform ${SPIN_MS}ms cubic-bezier(0.12, 0.7, 0.1, 1)` : 'none',
-              background: `conic-gradient(${SEGMENTS.map((s, i) => {
-                const start = i * segmentAngle
-                const end = (i + 1) * segmentAngle
-                return `${s.color} ${start}deg ${end}deg`
-              }).join(',')})`,
+              background: `conic-gradient(from -90deg, ${SEGMENTS.map((s, i) => {
+  const start = i * segmentAngle
+  const end = (i + 1) * segmentAngle
+  return `${s.color} ${start}deg ${end}deg`
+}).join(',')})`,
+
               backfaceVisibility: 'hidden',
               transformStyle: 'preserve-3d',
             }}
