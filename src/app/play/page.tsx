@@ -118,7 +118,7 @@ export default function PlayPage() {
     const center = idx * segmentAngle + segmentAngle / 2
     const extraTurns = 5 + Math.floor(Math.random() * 3)
     const jitter = Math.random() * 10 - 5
-    const targetDelta = -(center + 90) + jitter
+    const targetDelta = -center + jitter
 
     setRotation((prev) => prev + extraTurns * 360 + targetDelta)
   }
