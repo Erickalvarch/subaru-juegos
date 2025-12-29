@@ -1,7 +1,7 @@
 'use client'
 
+import React, { useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
-import { useMemo, useRef, useState } from 'react'
 
 type Prize = 'BACKPACK' | 'WATER' | 'LANYARD' | 'BLANKET' | 'TRY_AGAIN'
 
@@ -33,13 +33,18 @@ const SEGMENTS: Array<{
 
 const SPIN_MS = 5200
 
+// ✅ Ruleta (si cambias tamaño, todo se ajusta solo)
+const WHEEL_SIZE = 340
+const WHEEL_RADIUS = WHEEL_SIZE / 2
+const ICON_RADIUS = WHEEL_RADIUS * 0.68 // 0.66–0.70 recomendado
+
 export default function PlayPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
-  const [info, setInfo] = useState<string | null>(null) // 👈 mensaje “no-error”
+  const [info, setInfo] = useState<string | null>(null)
   const [result, setResult] = useState<Prize | null>(null)
 
   const [rotation, setRotation] = useState(0)
@@ -79,7 +84,6 @@ export default function PlayPage() {
 
     tickTimerRef.current = window.setInterval(() => {
       playTick()
-
       const t = Date.now() - start
       if (t > 2600) interval = 130
       if (t > 4300) interval = 170
@@ -155,7 +159,7 @@ export default function PlayPage() {
         return
       }
 
-      // 🟢 Caso normal: llegó premio
+      // 🟢 Caso normal
       if (data.ok !== true) {
         setError('No llegó resultado desde el servidor')
         setIsSpinning(false)
@@ -231,6 +235,7 @@ export default function PlayPage() {
           boxShadow: '0 18px 60px rgba(0,0,0,0.55)',
         }}
       >
+        {/* Título */}
         <div style={{ display: 'grid', placeItems: 'center', marginBottom: 8 }}>
           <Image
             src="/assets/titulo-evento2.png"
@@ -242,6 +247,7 @@ export default function PlayPage() {
           />
         </div>
 
+        {/* Form */}
         <div style={{ display: 'grid', gap: 10 }}>
           <input
             style={inputStyle}
@@ -286,7 +292,9 @@ export default function PlayPage() {
           </div>
         </div>
 
+        {/* Ruleta */}
         <div style={{ marginTop: 14, position: 'relative', display: 'grid', placeItems: 'center', padding: 8 }}>
+          {/* Flecha */}
           <div
             style={{
               position: 'absolute',
@@ -301,6 +309,7 @@ export default function PlayPage() {
             }}
           />
 
+          {/* Glow */}
           {glow && (
             <div
               style={{
@@ -319,8 +328,8 @@ export default function PlayPage() {
 
           <div
             style={{
-              width: 340,
-              height: 340,
+              width: WHEEL_SIZE,
+              height: WHEEL_SIZE,
               borderRadius: '50%',
               position: 'relative',
               overflow: 'hidden',
@@ -338,40 +347,50 @@ export default function PlayPage() {
               transformStyle: 'preserve-3d',
             }}
           >
+            {/* ✅ Iconos centrados proporcionalmente (sin adivinar px) */}
             {SEGMENTS.map((s, i) => {
               const angle = i * segmentAngle + segmentAngle / 2
 
               return (
-             <div
-  key={s.key}
-  style={{
-    position: 'absolute',
-    left: '50%',
-    top: '50%',
-    width: 0,
-    height: 0,
-    transform: `rotate(${angle}deg) translateY(-90px)`,
-    pointerEvents: 'none',
-  }}
->
-
-                  <div style={{ transform: `translate(-50%, -50%) rotate(${-angle}deg)` }}>
-  <div style={{ width: 140, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
-
-                      <Image
-                        src={s.iconSrc}
-                        alt=""
-                        aria-hidden
-                        width={56}
-                        height={56}
-                        style={{ width: 56, height: 56, objectFit: 'contain' }}
-                      />
-                    </div>
+                <div
+                  key={s.key}
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    width: 0,
+                    height: 0,
+                    transform: `rotate(${angle}deg) translateY(-${ICON_RADIUS}px)`,
+                    pointerEvents: 'none',
+                    zIndex: 3,
+                  }}
+                >
+                  <div
+                    style={{
+                      transform: `translate(-50%, -50%) rotate(${-angle}deg)`,
+                      display: 'grid',
+                      placeItems: 'center',
+                    }}
+                  >
+                    <Image
+                      src={s.iconSrc}
+                      alt=""
+                      aria-hidden
+                      width={56}
+                      height={56}
+                      style={{
+                        width: 56,
+                        height: 56,
+                        objectFit: 'contain',
+                        filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.6))',
+                      }}
+                    />
                   </div>
                 </div>
               )
             })}
 
+            {/* Centro */}
             <div
               style={{
                 position: 'absolute',
@@ -399,6 +418,7 @@ export default function PlayPage() {
           </div>
         </div>
 
+        {/* Resultado / Info / Error */}
         {(resultText || error || info) && (
           <div
             style={{
@@ -406,9 +426,9 @@ export default function PlayPage() {
               padding: 14,
               borderRadius: 14,
               border: '1px solid rgba(255,255,255,0.12)',
+              background: 'rgba(30,136,229,0.12)',
               boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
-backdropFilter: 'blur(10px)',
-
+              backdropFilter: 'blur(10px)',
               textAlign: 'center',
             }}
           >
@@ -418,24 +438,24 @@ backdropFilter: 'blur(10px)',
               </div>
             )}
 
-         {info && (
-  <div
-    style={{
-      fontSize: 16,
-      fontWeight: 900,
-      padding: '10px 12px',
-      borderRadius: 12,
-      background: 'rgba(11,61,145,0.35)',
-      border: '1px solid rgba(255,255,255,0.16)',
-    }}
-  >
-    ✅ {info}
-  </div>
-)}
-
+            {info && (
+              <div
+                style={{
+                  marginTop: result ? 10 : 0,
+                  fontSize: 16,
+                  fontWeight: 900,
+                  padding: '10px 12px',
+                  borderRadius: 12,
+                  background: 'rgba(11,61,145,0.35)',
+                  border: '1px solid rgba(255,255,255,0.16)',
+                }}
+              >
+                ✅ {info}
+              </div>
+            )}
 
             {error && (
-              <div>
+              <div style={{ marginTop: 8 }}>
                 <b>Error:</b> {error}
               </div>
             )}
@@ -498,7 +518,7 @@ function ConfettiOverlay() {
               animation: `confettiFall ${duration}s ease-in ${delay}s forwards`,
               filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))',
               ['--drift' as any]: `${drift}px`,
-            } as React.CSSProperties}
+            }}
           />
         )
       })}
