@@ -3,8 +3,16 @@
 import Image from 'next/image'
 import { useMemo, useRef, useState } from 'react'
 
-type Prize = 'BACKPACK' | 'WATER' | 'TRY_AGAIN'
+type Prize = 'BACKPACK' | 'WATER' | 'LANYARD' | 'BLANKET' | 'TRY_AGAIN'
 type ApiResp = { result?: Prize; error?: string }
+
+const prizeLabels: Record<Prize, string> = {
+  BACKPACK: 'Mochila',
+  WATER: 'Agua',
+  LANYARD: 'Lanyard',
+  BLANKET: 'Manta',
+  TRY_AGAIN: 'Sigue participando',
+}
 
 const SEGMENTS: Array<{
   key: Prize
@@ -12,9 +20,11 @@ const SEGMENTS: Array<{
   iconSrc: string
   color: string
 }> = [
-  { key: 'BACKPACK', label: 'Mochila', iconSrc: '/assets/icon-mochila.png', color: '#0B3D91' },
-  { key: 'WATER', label: 'Agua', iconSrc: '/assets/icon-agua.png', color: '#1E88E5' },
-  { key: 'TRY_AGAIN', label: 'Sigue participando', iconSrc: '/assets/logo-subaru_blanco.png', color: '#2E2E2E' },
+  { key: 'BACKPACK', label: prizeLabels.BACKPACK, iconSrc: '/assets/icon-mochila.png', color: '#0B3D91' },
+  { key: 'WATER', label: prizeLabels.WATER, iconSrc: '/assets/icon-agua.png', color: '#1E88E5' },
+  { key: 'LANYARD', label: prizeLabels.LANYARD, iconSrc: '/assets/lanyard.png', color: '#145A9C' },
+  { key: 'BLANKET', label: prizeLabels.BLANKET, iconSrc: '/assets/manta.png', color: '#1A1A1A' },
+  { key: 'TRY_AGAIN', label: prizeLabels.TRY_AGAIN, iconSrc: '/assets/logo-subaru_blanco.png', color: '#2E2E2E' },
 ]
 
 const SPIN_MS = 5200
@@ -61,6 +71,9 @@ export default function PlayPage() {
     let interval = 90
     const start = Date.now()
 
+    // Nota: tu implementación original cambia "interval",
+    // pero setInterval no se reprograma solo. Se mantiene igual,
+    // y lo dejamos así porque es tu lógica actual.
     tickTimerRef.current = window.setInterval(() => {
       playTick()
 
@@ -144,12 +157,14 @@ export default function PlayPage() {
         setResult(prize)
         setIsSpinning(false)
 
+        // Glow solo para Mochila
         if (prize === 'BACKPACK') {
           setGlow(true)
           window.setTimeout(() => setGlow(false), 2400)
         }
 
-        if (prize === 'BACKPACK' || prize === 'WATER') {
+        // Confetti para cualquier premio excepto TRY_AGAIN
+        if (prize !== 'TRY_AGAIN') {
           fireConfetti()
         }
       }, SPIN_MS)
@@ -162,14 +177,19 @@ export default function PlayPage() {
     }
   }
 
-  const resultText =
+  const resultText = result ? prizeLabels[result] : null
+  const resultEmoji =
     result === 'BACKPACK'
-      ? '¡Ganaste Mochila!'
+      ? '🎒'
       : result === 'WATER'
-      ? 'Ganaste Agua'
+      ? '💧'
+      : result === 'LANYARD'
+      ? '🪪'
+      : result === 'BLANKET'
+      ? '🧣'
       : result === 'TRY_AGAIN'
-      ? 'Sigue participando'
-      : null
+      ? '🙌'
+      : ''
 
   return (
     <div
@@ -316,7 +336,7 @@ export default function PlayPage() {
               transformStyle: 'preserve-3d',
             }}
           >
-            {/* Labels/Iconos (icono arriba, texto abajo, centrado) */}
+            {/* SOLO ICONOS (sin texto) */}
             {SEGMENTS.map((s, i) => {
               const angle = i * segmentAngle + segmentAngle / 2
 
@@ -340,27 +360,16 @@ export default function PlayPage() {
                         display: 'grid',
                         justifyItems: 'center',
                         textAlign: 'center',
-                        gap: 6,
                       }}
                     >
                       <Image
                         src={s.iconSrc}
-                        alt={s.label}
+                        alt=""
+                        aria-hidden
                         width={56}
                         height={56}
                         style={{ width: 56, height: 56, objectFit: 'contain' }}
                       />
-                      <div
-                        style={{
-                          fontWeight: 800,
-                          fontSize: 0,
-                          letterSpacing: 0.2,
-                          lineHeight: 1.1,
-                          textShadow: '0 2px 10px rgba(0,0,0,0.65)',
-                        }}
-                      >
-                        {s.label}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -403,23 +412,33 @@ export default function PlayPage() {
               padding: 14,
               borderRadius: 14,
               border: '1px solid rgba(255,255,255,0.12)',
-              background: 'rgba(255,255,255,0.06)',
+              background: 'rgba(255,255,0.06)',
               textAlign: 'center',
             }}
           >
             {result && (
               <div style={{ fontSize: 22, fontWeight: 900 }}>
-                {result === 'BACKPACK' ? '🎒' : result === 'WATER' ? '💧' : '🙌'} {resultText}
+                {resultEmoji} {result === 'TRY_AGAIN' ? resultText : `¡Ganaste ${resultText}!`}
               </div>
             )}
-            {error && <div><b>Error:</b> {error}</div>}
+            {error && (
+              <div>
+                <b>Error:</b> {error}
+              </div>
+            )}
           </div>
         )}
 
         <style jsx>{`
           @keyframes pulse {
-            from { transform: scale(0.98); opacity: 0.8; }
-            to   { transform: scale(1.03); opacity: 1; }
+            from {
+              transform: scale(0.98);
+              opacity: 0.8;
+            }
+            to {
+              transform: scale(1.03);
+              opacity: 1;
+            }
           }
         `}</style>
       </div>

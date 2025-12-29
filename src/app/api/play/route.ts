@@ -25,8 +25,19 @@ export async function POST(req: Request) {
 
     const cleanEmail = (email || '').toLowerCase().trim()
     const cleanName = (name || '').trim()
-
     const gt: GameType = gameType === 'slots' ? 'slots' : 'wheel'
+
+    if (!CAMPAIGN_ID) {
+      return NextResponse.json({ ok: false, error: 'Falta NEXT_PUBLIC_CAMPAIGN_ID' }, { status: 500 })
+    }
+
+    // Validaciones mínimas
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return NextResponse.json({ ok: false, error: 'Email inválido' }, { status: 400 })
+    }
+    if (!cleanName) {
+      return NextResponse.json({ ok: false, error: 'Nombre requerido' }, { status: 400 })
+    }
 
     // 1) Validar campaña activa
     const { data: campaign, error: campErr } = await supabase
@@ -36,12 +47,12 @@ export async function POST(req: Request) {
       .single()
 
     if (campErr || !campaign) {
-      return NextResponse.json({ error: 'Campaña no encontrada' }, { status: 404 })
+      return NextResponse.json({ ok: false, error: 'Campaña no encontrada' }, { status: 404 })
     }
 
     const now = new Date()
     if (!campaign.is_active || now < new Date(campaign.start_at) || now > new Date(campaign.end_at)) {
-      return NextResponse.json({ error: 'Campaña no activa' }, { status: 403 })
+      return NextResponse.json({ ok: false, error: 'Campaña no activa' }, { status: 403 })
     }
 
     // 2) Insertar jugador (1 por campaña)
@@ -52,7 +63,7 @@ export async function POST(req: Request) {
       .eq('email', cleanEmail)
       .maybeSingle()
 
-    if (existErr) return NextResponse.json({ error: existErr.message }, { status: 500 })
+    if (existErr) return NextResponse.json({ ok: false, error: existErr.message }, { status: 500 })
 
     if (!existingPlayer) {
       const { error: insErr } = await supabase.from('players').insert({
@@ -60,7 +71,11 @@ export async function POST(req: Request) {
         name: cleanName,
         email: cleanEmail,
       })
-      if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+
+      // Si se intentó insertar al mismo tiempo desde otra pestaña/click, ignoramos el duplicado
+      if (insErr && insErr.code !== '23505') {
+        return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 })
+      }
     }
 
     // 3) Leer release_window (para “forzar mochila dentro de N jugadas”)
@@ -70,7 +85,7 @@ export async function POST(req: Request) {
       .eq('campaign_id', CAMPAIGN_ID)
       .maybeSingle()
 
-    if (relErr) return NextResponse.json({ error: relErr.message }, { status: 500 })
+    if (relErr) return NextResponse.json({ ok: false, error: relErr.message }, { status: 500 })
 
     // 4) Leer probabilidades para este juego
     const { data: weights, error: wErr } = await supabase
@@ -79,12 +94,13 @@ export async function POST(req: Request) {
       .eq('campaign_id', CAMPAIGN_ID)
       .eq('game_type', gt)
 
-    if (wErr) return NextResponse.json({ error: wErr.message }, { status: 500 })
+    if (wErr) return NextResponse.json({ ok: false, error: wErr.message }, { status: 500 })
 
     // Lista permitida por juego (manta solo en ruleta)
-    const allowed: PrizeKey[] = gt === 'wheel'
-      ? ['BACKPACK', 'WATER', 'LANYARD', 'BLANKET', 'TRY_AGAIN']
-      : ['BACKPACK', 'WATER', 'LANYARD', 'TRY_AGAIN']
+    const allowed: PrizeKey[] =
+      gt === 'wheel'
+        ? ['BACKPACK', 'WATER', 'LANYARD', 'BLANKET', 'TRY_AGAIN']
+        : ['BACKPACK', 'WATER', 'LANYARD', 'TRY_AGAIN']
 
     const normalized = (weights || [])
       .map((r: any) => ({ prize_key: r.prize_key as PrizeKey, weight: Number(r.weight || 0) }))
@@ -97,23 +113,28 @@ export async function POST(req: Request) {
     if (releaseRow?.is_enabled && (releaseRow.remaining_spins ?? 0) > 0) {
       const remaining = Number(releaseRow.remaining_spins)
 
-      // Se cuenta esta jugada como válida
       if (remaining <= 1) {
         result = 'BACKPACK'
         // cerrar ventana
-        await supabase.from('release_window').update({
-          is_enabled: false,
-          remaining_spins: 0,
-          updated_at: new Date().toISOString(),
-        }).eq('campaign_id', CAMPAIGN_ID)
+        await supabase
+          .from('release_window')
+          .update({
+            is_enabled: false,
+            remaining_spins: 0,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('campaign_id', CAMPAIGN_ID)
       } else {
-        // decrementa y en esta jugada NO fuerza mochila (se fuerza al final del conteo)
-        await supabase.from('release_window').update({
-          remaining_spins: remaining - 1,
-          updated_at: new Date().toISOString(),
-        }).eq('campaign_id', CAMPAIGN_ID)
+        // decrementa y en esta jugada NO fuerza mochila
+        await supabase
+          .from('release_window')
+          .update({
+            remaining_spins: remaining - 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('campaign_id', CAMPAIGN_ID)
 
-        // sorteamos excluyendo BACKPACK (para que sea “controlado”)
+        // sorteo excluyendo BACKPACK
         const noBackpack = normalized.filter(n => n.prize_key !== 'BACKPACK')
         result = pickWeighted(noBackpack.length ? noBackpack : [{ prize_key: 'TRY_AGAIN', weight: 1 }])
       }
@@ -131,10 +152,24 @@ export async function POST(req: Request) {
       result,
     })
 
-    if (playErr) return NextResponse.json({ error: playErr.message }, { status: 500 })
+    if (playErr) {
+      // UNIQUE VIOLATION (ya participó)
+      if (playErr.code === '23505') {
+        return NextResponse.json(
+          {
+            ok: false,
+            reason: 'ALREADY_PLAYED',
+            message: 'Ya participaste en esta campaña. ¡Gracias por jugar!',
+          },
+          { status: 200 }
+        )
+      }
+
+      return NextResponse.json({ ok: false, error: playErr.message }, { status: 500 })
+    }
 
     return NextResponse.json({ ok: true, result })
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Error' }, { status: 500 })
+    return NextResponse.json({ ok: false, error: e?.message ?? 'Error' }, { status: 500 })
   }
 }
