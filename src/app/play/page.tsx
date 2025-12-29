@@ -350,7 +350,7 @@ export default function PlayPage() {
     top: '50%',
     width: 0,
     height: 0,
-    transform: `rotate(${angle}deg) translateY(-130px)`,
+    transform: `rotate(${angle}deg) translateY(-90px)`,
     pointerEvents: 'none',
   }}
 >
