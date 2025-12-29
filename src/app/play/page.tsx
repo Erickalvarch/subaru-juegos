@@ -350,7 +350,7 @@ export default function PlayPage() {
           >
             {/* ✅ Iconos centrados proporcionalmente (sin adivinar px) */}
             {SEGMENTS.map((s, i) => {
-              const angle = i * segmentAngle + segmentAngle / 2
+              const angle = -90 + i * segmentAngle + segmentAngle / 2
 
               return (
                 <div
