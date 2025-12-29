@@ -124,75 +124,72 @@ export default function PlayPage() {
   }
 
   async function play() {
-    setLoading(true)
-    setError(null)
-    setInfo(null)
-    setResult(null)
-    setGlow(false)
-    setIsSpinning(true)
+  setLoading(true)
+  setError(null)
+  setInfo(null)
+  setResult(null)
+  setGlow(false)
 
+  try {
+    // 1) Pedimos el resultado primero (sin girar aún)
+    const res = await fetch('/api/play', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, gameType: 'wheel' }),
+    })
+
+    const data: ApiResp = await res.json()
+
+    // 🟡 Ya participó (no giramos)
+    if (data.ok === false && 'reason' in data && data.reason === 'ALREADY_PLAYED') {
+      setError(null)
+      setInfo(data.message ?? 'Ya participaste en esta campaña. ¡Gracias por jugar!')
+      return
+    }
+
+    // 🔴 Error real
+    if (!res.ok || (data.ok === false && 'error' in data)) {
+      setError('error' in data ? data.error : 'Error al procesar la jugada')
+      return
+    }
+
+    // 🟢 OK: tenemos premio
+    if (data.ok !== true) {
+      setError('No llegó resultado desde el servidor')
+      return
+    }
+
+    const prize = data.result
+
+    // 2) Recién ahora arrancamos animación + sonido
+    setIsSpinning(true)
     startTicks()
 
-    try {
-      const res = await fetch('/api/play', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, gameType: 'wheel' }),
-      })
+    spinToPrize(prize)
 
-      const data: ApiResp = await res.json()
-
-      // 🟡 Caso: ya participó (NO es error técnico)
-      if (data.ok === false && 'reason' in data && data.reason === 'ALREADY_PLAYED') {
-        setError(null)
-        setInfo(data.message ?? 'Ya participaste en esta campaña. ¡Gracias por jugar!')
-        setIsSpinning(false)
-        stopTicks()
-        return
-      }
-
-      // 🔴 Errores reales
-      if (!res.ok || (data.ok === false && 'error' in data)) {
-        setError('error' in data ? data.error : 'Error al procesar la jugada')
-        setIsSpinning(false)
-        stopTicks()
-        return
-      }
-
-      // 🟢 Caso normal
-      if (data.ok !== true) {
-        setError('No llegó resultado desde el servidor')
-        setIsSpinning(false)
-        stopTicks()
-        return
-      }
-
-      const prize = data.result
-
-      spinToPrize(prize)
-
-      window.setTimeout(() => {
-        stopTicks()
-        setResult(prize)
-        setIsSpinning(false)
-
-        if (prize === 'BACKPACK') {
-          setGlow(true)
-          window.setTimeout(() => setGlow(false), 2400)
-        }
-
-        if (prize !== 'TRY_AGAIN') {
-          fireConfetti()
-        }
-      }, SPIN_MS)
-    } catch (e: any) {
+    window.setTimeout(() => {
       stopTicks()
-      setError(e?.message ?? 'Error de red')
+      setResult(prize)
       setIsSpinning(false)
-    } finally {
-      setLoading(false)
-    }
+
+      if (prize === 'BACKPACK') {
+        setGlow(true)
+        window.setTimeout(() => setGlow(false), 2400)
+      }
+
+      if (prize !== 'TRY_AGAIN') {
+        fireConfetti()
+      }
+    }, SPIN_MS)
+  } catch (e: any) {
+    stopTicks()
+    setError(e?.message ?? 'Error de red')
+    setIsSpinning(false)
+  } finally {
+    setLoading(false)
   }
+}
+
 
   const resultText = result ? prizeLabels[result] : null
   const resultEmoji =
