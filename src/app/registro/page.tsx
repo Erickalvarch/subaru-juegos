@@ -47,12 +47,13 @@ export default function RegistroPage() {
       const data: Resp = await res.json()
 
       if (!res.ok || data.ok !== true) {
-        setError(
-          data.error ||
-            'No fue posible completar el registro. Intenta nuevamente.'
-        )
-        return
-      }
+  const msg =
+    (data.ok === false ? data.error : null) ??
+    'No fue posible completar el registro. Intenta nuevamente.'
+  setError(msg)
+  return
+}
+
 
       setCode(data.code)
     } catch (e: any) {
