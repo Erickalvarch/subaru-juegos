@@ -109,6 +109,28 @@ export default function SlotsPage() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [canPlay])
 
+  // Botón físico: Click derecho (2º click del mouse)
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 2) return // 2 = right click
+      e.preventDefault()
+      if (canPlay) void spin()
+    }
+
+    const onContextMenu = (e: MouseEvent) => {
+      // Evita que aparezca el menú contextual del navegador
+      e.preventDefault()
+    }
+
+    window.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('contextmenu', onContextMenu)
+
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('contextmenu', onContextMenu)
+    }
+  }, [canPlay])
+
   function randomReels() {
     const a = Math.floor(Math.random() * SYMBOLS.length)
     const b = Math.floor(Math.random() * SYMBOLS.length)
@@ -158,6 +180,7 @@ export default function SlotsPage() {
   }
 
   async function spin() {
+
     // si no está validado aún, validamos primero (por si apretan Enter/Space directo)
     if (!validated) {
       const ok = await validateCode()
