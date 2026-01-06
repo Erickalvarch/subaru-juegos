@@ -9,6 +9,8 @@ type ReleaseRow = {
   updated_at?: string | null
 }
 
+type Counts = Record<string, number>
+
 export default function AdminPage() {
   const [pin, setPin] = useState('')
   const [authed, setAuthed] = useState(false)
@@ -18,12 +20,17 @@ export default function AdminPage() {
   const [err, setErr] = useState<string | null>(null)
 
   const [release, setRelease] = useState<ReleaseRow | null>(null)
-  const [counts, setCounts] = useState<any>(null)
+  const [counts, setCounts] = useState<Counts | null>(null)
   const [todayChile, setTodayChile] = useState<string>('')
 
   const [remaining, setRemaining] = useState<number>(10)
 
   const canAuth = useMemo(() => pin.trim().length >= 4, [pin])
+
+  function c(key: string, fallback = 0) {
+    const v = counts?.[key]
+    return typeof v === 'number' ? v : fallback
+  }
 
   async function fetchStatus() {
     setLoading(true)
@@ -39,10 +46,10 @@ export default function AdminPage() {
       if (!r.ok) throw new Error(data?.error ?? 'Error status')
 
       setAuthed(true)
-      setRelease(data.release)
-      setCounts(data.counts)
-      setTodayChile(data.todayChile)
-      setRemaining(data.release?.remaining_spins ?? 10)
+      setRelease(data.release ?? null)
+      setCounts(data.counts ?? null)
+      setTodayChile(data.todayChile ?? '')
+      setRemaining((data.release?.remaining_spins ?? 10) as number)
     } catch (e: any) {
       setErr(e?.message ?? 'Error')
       setAuthed(false)
@@ -76,17 +83,9 @@ export default function AdminPage() {
     }
   }
 
-  // Si quieres auto-refresh, lo ponemos bien (por ahora lo dejamos OFF para no molestar)
-  // useEffect(() => {
-  //   if (!authed) return
-  //   const t = window.setInterval(() => {
-  //     const active = document.activeElement
-  //     const isTyping =
-  //       active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || (active as any)?.isContentEditable
-  //     if (!isTyping && !loading) void fetchStatus()
-  //   }, 30000)
-  //   return () => window.clearInterval(t)
-  // }, [authed, loading])
+  // Compat: si backend aún devuelve SLOTS, lo tratamos como TOMBOLA
+  const tombolaCount = c('TOMBOLA', c('SLOTS', 0))
+  const wheelCount = c('WHEEL', 0)
 
   return (
     <div style={pageStyle}>
@@ -114,17 +113,27 @@ export default function AdminPage() {
 
         {authed && (
           <div style={{ display: 'grid', gap: 14 }}>
+            {/* RESUMEN COMPLETO */}
             <div style={sectionStyle}>
               <div style={hStyle}>Estado hoy (Chile) {todayChile ? `• ${todayChile}` : ''}</div>
+
+              {/* Totales */}
               <div style={grid3}>
-                <Stat label="Mochilas hoy" value={counts?.BACKPACK ?? '-'} />
-                <Stat label="Aguas hoy" value={counts?.WATER ?? '-'} />
-                <Stat label="Jugadas hoy" value={counts?.TOTAL ?? '-'} />
+                <Stat label="Jugadas hoy" value={c('TOTAL', 0)} />
+                <Stat label="Ruleta" value={wheelCount} />
+                <Stat label="Tómbola" value={tombolaCount} />
+              </div>
+
+              {/* Premios globales */}
+              <div style={grid3}>
+                <Stat label="Mochilas" value={c('BACKPACK', 0)} />
+                <Stat label="Aguas" value={c('WATER', 0)} />
+                <Stat label="Lanyard" value={c('LANYARD', 0)} />
               </div>
               <div style={grid3}>
-                <Stat label="Ruleta" value={counts?.WHEEL ?? '-'} />
-                <Stat label="Tragamonedas" value={counts?.SLOTS ?? '-'} />
-                <Stat label="Sigue" value={counts?.TRY_AGAIN ?? '-'} />
+                <Stat label="Buff" value={c('BUFF', 0)} />
+                <Stat label="Manta" value={c('BLANKET', 0)} />
+                <Stat label="Sigue" value={c('TRY_AGAIN', 0)} />
               </div>
 
               <button style={btnGhost(!loading)} disabled={loading} onClick={fetchStatus}>
@@ -158,7 +167,11 @@ export default function AdminPage() {
                     disabled={loading}
                     placeholder="10"
                   />
-                  <button style={btnPrimary(!loading)} disabled={loading} onClick={() => setReleaseWindow(true, remaining)}>
+                  <button
+                    style={btnPrimary(!loading)}
+                    disabled={loading}
+                    onClick={() => setReleaseWindow(true, remaining)}
+                  >
                     🎒 Activar en próximas {remaining || 10} jugadas
                   </button>
                 </div>
@@ -174,7 +187,9 @@ export default function AdminPage() {
                 </div>
 
                 <div style={{ fontSize: 12, opacity: 0.7 }}>
-                  * Cuenta solo jugadas válidas registradas. Cuando se entrega Mochila, la ventana se cierra automáticamente (según la lógica del backend).
+                  * BACKPACK (Mochila) en Tómbola solo puede salir cuando esta ventana está ACTIVA.
+                  <br />
+                  Cuando se entrega una Mochila, la ventana se cierra automáticamente (según la lógica del backend).
                 </div>
 
                 {msg && <div style={okStyle}>{msg}</div>}
@@ -321,11 +336,13 @@ function PrizeWeightsEditor({ pin }: { pin: string }) {
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
-  type Row = { game_type: 'wheel' | 'slots'; prize_key: string; weight: number }
+  // OJO: aquí usamos tombola (NO slots)
+  type Row = { game_type: 'wheel' | 'tombola'; prize_key: string; weight: number }
   const [rows, setRows] = useState<Row[]>([])
 
-  const wheelKeys = ['BACKPACK', 'WATER', 'LANYARD', 'BLANKET', 'TRY_AGAIN']
-  const slotsKeys = ['BACKPACK', 'WATER', 'LANYARD', 'TRY_AGAIN']
+  // Tu definición actual de premios
+  const wheelKeys = ['BUFF', 'LANYARD', 'BLANKET', 'TRY_AGAIN']
+  const tombolaKeys = ['BUFF', 'BACKPACK', 'WATER', 'LANYARD', 'TRY_AGAIN']
 
   async function load() {
     setLoading(true)
@@ -341,11 +358,15 @@ function PrizeWeightsEditor({ pin }: { pin: string }) {
       if (!r.ok) throw new Error(data?.error ?? 'Error')
 
       const map = new Map<string, number>()
-      for (const it of data.items ?? []) map.set(`${it.game_type}:${it.prize_key}`, Number(it.weight || 0))
+      for (const it of data.items ?? []) {
+        map.set(`${it.game_type}:${it.prize_key}`, Number(it.weight || 0))
+      }
 
       const merged: Row[] = []
       for (const k of wheelKeys) merged.push({ game_type: 'wheel', prize_key: k, weight: map.get(`wheel:${k}`) ?? 0 })
-      for (const k of slotsKeys) merged.push({ game_type: 'slots', prize_key: k, weight: map.get(`slots:${k}`) ?? 0 })
+      for (const k of tombolaKeys)
+        merged.push({ game_type: 'tombola', prize_key: k, weight: map.get(`tombola:${k}`) ?? 0 })
+
       setRows(merged)
     } catch (e: any) {
       setErr(e?.message ?? 'Error')
@@ -380,9 +401,9 @@ function PrizeWeightsEditor({ pin }: { pin: string }) {
   }, [])
 
   const wheelSum = rows.filter((r) => r.game_type === 'wheel').reduce((s, r) => s + (Number(r.weight) || 0), 0)
-  const slotsSum = rows.filter((r) => r.game_type === 'slots').reduce((s, r) => s + (Number(r.weight) || 0), 0)
+  const tombolaSum = rows.filter((r) => r.game_type === 'tombola').reduce((s, r) => s + (Number(r.weight) || 0), 0)
 
-  function setWeight(game_type: 'wheel' | 'slots', prize_key: string, value: number) {
+  function setWeight(game_type: 'wheel' | 'tombola', prize_key: string, value: number) {
     setRows((prev) =>
       prev.map((r) => (r.game_type === game_type && r.prize_key === prize_key ? { ...r, weight: value } : r))
     )
@@ -394,7 +415,7 @@ function PrizeWeightsEditor({ pin }: { pin: string }) {
       <div style={{ fontSize: 12, opacity: 0.7 }}>
         Se guardan como “pesos”. Puedes tratarlos como % si haces que sumen 100.
         <br />
-        * Manta (BLANKET) solo existe en Ruleta.
+        * 🎒 BACKPACK (Mochila) solo se entrega en Tómbola cuando la ventana está ACTIVADA.
       </div>
 
       <div style={{ display: 'grid', gap: 12 }}>
@@ -421,19 +442,19 @@ function PrizeWeightsEditor({ pin }: { pin: string }) {
         </div>
 
         <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{ fontWeight: 900, opacity: 0.9 }}>🎰 Tragamonedas (slots) • Suma: {slotsSum}</div>
+          <div style={{ fontWeight: 900, opacity: 0.9 }}>🎰 Tómbola (tombola) • Suma: {tombolaSum}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
-            {slotsKeys.map((k) => {
-              const row = rows.find((r) => r.game_type === 'slots' && r.prize_key === k)!
+            {tombolaKeys.map((k) => {
+              const row = rows.find((r) => r.game_type === 'tombola' && r.prize_key === k)!
               return (
-                <div key={`slots-${k}`} style={{ display: 'contents' }}>
+                <div key={`tombola-${k}`} style={{ display: 'contents' }}>
                   <div style={{ opacity: 0.9, padding: '10px 0' }}>{k}</div>
                   <input
                     style={inputStyle}
                     type="number"
                     step="0.1"
                     value={row?.weight ?? 0}
-                    onChange={(e) => setWeight('slots', k, Number(e.target.value || 0))}
+                    onChange={(e) => setWeight('tombola', k, Number(e.target.value || 0))}
                     disabled={loading}
                   />
                 </div>

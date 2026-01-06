@@ -4,21 +4,20 @@ import Image from 'next/image'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 /**
- * PREMIOS POSIBLES (desde backend) - Tómbola Stand
- * BACKPACK / WATER / BUFF / LANYARD / TRY_AGAIN
+ * PREMIOS POSIBLES (desde backend)
+ * - Slots: BACKPACK, WATER, LANYARD, TRY_AGAIN
+ * - BLANKET existe solo en Ruleta, pero aquí NO la usamos.
  */
-type Prize = 'BACKPACK' | 'WATER' | 'BUFF' | 'LANYARD' | 'TRY_AGAIN'
+type Prize = 'BACKPACK' | 'WATER' | 'LANYARD' | 'TRY_AGAIN'
 
-type ValidateResp =
-  | { ok: true; code: string; registration: { id: string; name: string; email: string } }
+type ApiResp =
+  | { ok: true; result: Prize }
+  | { ok: false; reason: 'ALREADY_PLAYED'; message: string }
   | { ok: false; error: string }
-
-type PlayResp = { ok: true; prize_key: Prize } | { ok: false; error: string }
 
 const SYMBOLS: Array<{ key: Prize; label: string; icon: string }> = [
   { key: 'BACKPACK', label: 'Mochila', icon: '/assets/icon-mochila.png' },
   { key: 'WATER', label: 'Agua', icon: '/assets/icon-agua.png' },
-  { key: 'BUFF', label: 'Buff', icon: '/assets/buff.png' },
   { key: 'LANYARD', label: 'Lanyard', icon: '/assets/lanyard.png' },
   { key: 'TRY_AGAIN', label: 'Sigue participando', icon: '/assets/icon-sigue.png' },
 ]
@@ -26,14 +25,13 @@ const SYMBOLS: Array<{ key: Prize; label: string; icon: string }> = [
 const SPIN_MS = 5200
 
 export default function SlotsPage() {
-  // 👇 Ahora se juega con CÓDIGO (4 dígitos)
-  const [code, setCode] = useState('')
-  const [validated, setValidated] = useState(false)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
 
   const [busy, setBusy] = useState(false)
   const [spinning, setSpinning] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [info, setInfo] = useState<string | null>(null) // mensaje “no-error”
+  const [info, setInfo] = useState<string | null>(null) // 👈 mensaje “no-error”
   const [result, setResult] = useState<Prize | null>(null)
   const [confettiOn, setConfettiOn] = useState(false)
   const [glow, setGlow] = useState(false)
@@ -45,8 +43,6 @@ export default function SlotsPage() {
   // WebAudio tick
   const audioCtxRef = useRef<AudioContext | null>(null)
   const tickTimerRef = useRef<number | null>(null)
-
-  const codeNormalized = useMemo(() => code.replace(/\D/g, '').slice(0, 4), [code])
 
   function playTick() {
     if (!audioCtxRef.current) {
@@ -88,13 +84,9 @@ export default function SlotsPage() {
     window.setTimeout(() => setConfettiOn(false), 1800)
   }
 
-  const canValidate = useMemo(() => {
-    return codeNormalized.length >= 1 && !busy && !spinning
-  }, [codeNormalized, busy, spinning])
-
   const canPlay = useMemo(() => {
-    return validated && !busy && !spinning
-  }, [validated, busy, spinning])
+    return name.trim().length > 1 && email.trim().includes('@') && !busy && !spinning
+  }, [name, email, busy, spinning])
 
   // Botón físico: Space o Enter
   useEffect(() => {
@@ -120,50 +112,7 @@ export default function SlotsPage() {
     return SYMBOLS.findIndex((s) => s.key === p)
   }
 
-  async function validateCode() {
-    setError(null)
-    setInfo(null)
-    setResult(null)
-    setGlow(false)
-
-    if (!codeNormalized) {
-      setValidated(false)
-      setError('Ingresa tu código')
-      return false
-    }
-
-    try {
-      const res = await fetch('/api/tombola/validate-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: codeNormalized }),
-      })
-
-      const data: ValidateResp = await res.json()
-
-      if (!res.ok || data.ok !== true) {
-        setValidated(false)
-        setError((data as any)?.error || 'Código inválido')
-        return false
-      }
-
-      setValidated(true)
-      setInfo('✅ Código válido. Presiona GIRAR (o ESPACIO/ENTER).')
-      return true
-    } catch (e: any) {
-      setValidated(false)
-      setError(e?.message ?? 'Error de red')
-      return false
-    }
-  }
-
   async function spin() {
-    // si no está validado aún, validamos primero (por si apretan Enter/Space directo)
-    if (!validated) {
-      const ok = await validateCode()
-      if (!ok) return
-    }
-
     setBusy(true)
     setSpinning(true)
     setSpinPhase('spinning')
@@ -186,26 +135,53 @@ export default function SlotsPage() {
     }, 80)
 
     try {
-      const res = await fetch('/api/tombola/play', {
+      const res = await fetch('/api/play', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: codeNormalized }),
+        body: JSON.stringify({
+          name,
+          email,
+          gameType: 'slots', // ✅ IMPORTANTE
+        }),
       })
 
-      const data: PlayResp = await res.json()
+      const data: ApiResp = await res.json()
 
-      // 🔴 Errores (incluye "Este código ya fue usado")
-      if (!res.ok || data.ok !== true) {
+      // 🟡 Caso: ya participó (NO es error técnico)
+      if (data.ok === false && 'reason' in data && data.reason === 'ALREADY_PLAYED') {
         clearInterval(anim)
         stopTicks()
 
-        setError((data as any)?.error || 'Error al procesar la jugada')
+        setError(null)
+        setInfo(data.message ?? 'Ya participaste en esta campaña. ¡Gracias por jugar!')
         setSpinning(false)
         setSpinPhase('idle')
         return
       }
 
-      const prize = data.prize_key
+      // 🔴 Errores reales
+      if (!res.ok || (data.ok === false && 'error' in data)) {
+        clearInterval(anim)
+        stopTicks()
+
+        setError('error' in data ? data.error : 'Error al procesar la jugada')
+        setSpinning(false)
+        setSpinPhase('idle')
+        return
+      }
+
+      // 🟢 Caso normal
+      if (data.ok !== true) {
+        clearInterval(anim)
+        stopTicks()
+
+        setError('No llegó resultado desde el servidor')
+        setSpinning(false)
+        setSpinPhase('idle')
+        return
+      }
+
+      const prize = data.result
       const idx = Math.max(0, prizeToSymbolIndex(prize))
 
       // fase stopping
@@ -227,7 +203,7 @@ export default function SlotsPage() {
         }
 
         // Confetti para premios “reales”
-        if (prize === 'BACKPACK' || prize === 'WATER' || prize === 'LANYARD' || prize === 'BUFF') {
+        if (prize === 'BACKPACK' || prize === 'WATER' || prize === 'LANYARD') {
           fireConfetti()
         }
       }, SPIN_MS)
@@ -242,42 +218,18 @@ export default function SlotsPage() {
     }
   }
 
-  function resetAll() {
-    setCode('')
-    setValidated(false)
-    setBusy(false)
-    setSpinning(false)
-    setError(null)
-    setInfo(null)
-    setResult(null)
-    setGlow(false)
-    setSpinPhase('idle')
-    setReels([0, 1, 2])
-  }
-
   const resultText =
     result === 'BACKPACK'
       ? '¡Ganaste Mochila!'
       : result === 'WATER'
-      ? '¡Ganaste Agua!'
-      : result === 'BUFF'
-      ? '¡Ganaste Buff!'
+      ? 'Ganaste Agua'
       : result === 'LANYARD'
-      ? '¡Ganaste Lanyard!'
+      ? 'Ganaste Lanyard'
       : result === 'TRY_AGAIN'
       ? 'Sigue participando'
       : null
 
-  const resultEmoji =
-    result === 'BACKPACK'
-      ? '🎒'
-      : result === 'WATER'
-      ? '💧'
-      : result === 'BUFF'
-      ? '🧣'
-      : result === 'LANYARD'
-      ? '🎟️'
-      : '🙌'
+  const resultEmoji = result === 'BACKPACK' ? '🎒' : result === 'WATER' ? '💧' : result === 'LANYARD' ? '🎟️' : '🙌'
 
   return (
     <div
@@ -350,27 +302,22 @@ export default function SlotsPage() {
           </div>
         </div>
 
-        {/* Inputs (solo CÓDIGO + botones) */}
-        <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12 }}>
+        {/* Inputs */}
+        <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12 }}>
           <input
             style={inputStyle}
-            placeholder="Código (4 dígitos)"
-            value={codeNormalized}
-            onChange={(e) => {
-              const v = e.target.value.replace(/\D/g, '').slice(0, 4)
-              setCode(v)
-              // si el usuario cambia el código, vuelve a requerir validación
-              setValidated(false)
-              setResult(null)
-              setInfo(null)
-              setError(null)
-            }}
+            placeholder="Nombre"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             disabled={busy || spinning}
           />
-
-          <button onClick={validateCode} disabled={!canValidate} style={primaryBtn(canValidate)}>
-            VALIDAR
-          </button>
+          <input
+            style={inputStyle}
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={busy || spinning}
+          />
 
           <button onClick={spin} disabled={!canPlay} style={primaryBtn(canPlay)}>
             {spinning ? 'GIRANDO…' : 'GIRAR'}
@@ -458,9 +405,9 @@ export default function SlotsPage() {
                 letterSpacing: 0.5,
               }}
             >
-              <div style={{ opacity: 0.9 }}>SUBARU • TÓMBOLA</div>
+              <div style={{ opacity: 0.9 }}>SUBARU • SLOT</div>
               <div style={{ opacity: 0.75, fontSize: 12 }}>
-                {spinning ? 'Girando…' : validated ? 'Código validado' : 'Ingresa y valida tu código'} • 1 uso por código
+                {spinning ? 'Girando…' : 'Listo'} • 1 participación por campaña
               </div>
             </div>
           </div>
@@ -483,7 +430,11 @@ export default function SlotsPage() {
               </div>
             )}
 
-            {info && <div style={{ fontSize: 16, fontWeight: 900 }}>{info}</div>}
+            {info && (
+              <div style={{ fontSize: 16, fontWeight: 900 }}>
+                ✅ {info}
+              </div>
+            )}
 
             {error && (
               <div style={{ fontSize: 16 }}>
@@ -493,12 +444,6 @@ export default function SlotsPage() {
 
             <div style={{ marginTop: 8, opacity: 0.75, fontSize: 12 }}>
               * Premios sujetos a stock diario y validación en stand.
-            </div>
-
-            <div style={{ marginTop: 10 }}>
-              <button onClick={resetAll} style={secondaryBtn}>
-                Nuevo jugador
-              </button>
             </div>
           </div>
         )}
@@ -681,18 +626,8 @@ function primaryBtn(enabled: boolean): React.CSSProperties {
     boxShadow: enabled ? '0 10px 30px rgba(30,136,229,0.35)' : 'none',
     opacity: enabled ? 1 : 0.55,
     cursor: enabled ? 'pointer' : 'not-allowed',
-    minWidth: 170,
+    minWidth: 220,
   }
-}
-
-const secondaryBtn: React.CSSProperties = {
-  padding: '12px 16px',
-  borderRadius: 14,
-  border: '1px solid rgba(255,255,255,0.18)',
-  background: 'rgba(255,255,255,0.10)',
-  color: '#fff',
-  fontWeight: 900,
-  cursor: 'pointer',
 }
 
 const kbdStyle: React.CSSProperties = {

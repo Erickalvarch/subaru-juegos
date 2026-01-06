@@ -1,175 +1,29 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
-
-const CAMPAIGN_ID = process.env.NEXT_PUBLIC_CAMPAIGN_ID!
+import { playGame } from '@/lib/playGame'
 
 type GameType = 'wheel' | 'slots'
-type PrizeKey = 'BACKPACK' | 'WATER' | 'LANYARD' | 'BLANKET' | 'TRY_AGAIN'
-
-function pickWeighted(items: Array<{ prize_key: PrizeKey; weight: number }>): PrizeKey {
-  const list = items.filter(i => i.weight > 0)
-  const total = list.reduce((s, i) => s + i.weight, 0)
-  if (total <= 0) return 'TRY_AGAIN'
-  let r = Math.random() * total
-  for (const i of list) {
-    r -= i.weight
-    if (r <= 0) return i.prize_key
-  }
-  return list[list.length - 1].prize_key
-}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { name, email, gameType } = body as { name: string; email: string; gameType?: string }
+    const name = String(body?.name ?? '').trim()
+    const email = String(body?.email ?? '').trim()
+    const gameType = String(body?.gameType ?? '').trim() as GameType
 
-    const cleanEmail = (email || '').toLowerCase().trim()
-    const cleanName = (name || '').trim()
-    const gt: GameType = gameType === 'slots' ? 'slots' : 'wheel'
+    if (!name) return NextResponse.json({ ok: false, error: 'Falta name' }, { status: 400 })
+    if (!email) return NextResponse.json({ ok: false, error: 'Falta email' }, { status: 400 })
 
-    if (!CAMPAIGN_ID) {
-      return NextResponse.json({ ok: false, error: 'Falta NEXT_PUBLIC_CAMPAIGN_ID' }, { status: 500 })
+    // BLOQUEO CLAVE: si llega "tombola", falla fuerte y no registra nada
+    if (!['wheel', 'slots'].includes(gameType)) {
+      return NextResponse.json(
+        { ok: false, error: 'gameType inválido para este endpoint' },
+        { status: 400 }
+      )
     }
 
-    // Validaciones mínimas
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      return NextResponse.json({ ok: false, error: 'Email inválido' }, { status: 400 })
-    }
-    if (!cleanName) {
-      return NextResponse.json({ ok: false, error: 'Nombre requerido' }, { status: 400 })
-    }
-
-    // 1) Validar campaña activa
-    const { data: campaign, error: campErr } = await supabase
-      .from('campaign')
-      .select('*')
-      .eq('id', CAMPAIGN_ID)
-      .single()
-
-    if (campErr || !campaign) {
-      return NextResponse.json({ ok: false, error: 'Campaña no encontrada' }, { status: 404 })
-    }
-
-    const now = new Date()
-    if (!campaign.is_active || now < new Date(campaign.start_at) || now > new Date(campaign.end_at)) {
-      return NextResponse.json({ ok: false, error: 'Campaña no activa' }, { status: 403 })
-    }
-
-    // 2) Insertar jugador (1 por campaña)
-    const { data: existingPlayer, error: existErr } = await supabase
-      .from('players')
-      .select('id')
-      .eq('campaign_id', CAMPAIGN_ID)
-      .eq('email', cleanEmail)
-      .maybeSingle()
-
-    if (existErr) return NextResponse.json({ ok: false, error: existErr.message }, { status: 500 })
-
-    if (!existingPlayer) {
-      const { error: insErr } = await supabase.from('players').insert({
-        campaign_id: CAMPAIGN_ID,
-        name: cleanName,
-        email: cleanEmail,
-      })
-
-      // Si se intentó insertar al mismo tiempo desde otra pestaña/click, ignoramos el duplicado
-      if (insErr && insErr.code !== '23505') {
-        return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 })
-      }
-    }
-
-    // 3) Leer release_window (para “forzar mochila dentro de N jugadas”)
-    const { data: releaseRow, error: relErr } = await supabase
-      .from('release_window')
-      .select('*')
-      .eq('campaign_id', CAMPAIGN_ID)
-      .maybeSingle()
-
-    if (relErr) return NextResponse.json({ ok: false, error: relErr.message }, { status: 500 })
-
-    // 4) Leer probabilidades para este juego
-    const { data: weights, error: wErr } = await supabase
-      .from('prize_weights')
-      .select('prize_key, weight')
-      .eq('campaign_id', CAMPAIGN_ID)
-      .eq('game_type', gt)
-
-    if (wErr) return NextResponse.json({ ok: false, error: wErr.message }, { status: 500 })
-
-    // Lista permitida por juego (manta solo en ruleta)
-    const allowed: PrizeKey[] =
-      gt === 'wheel'
-        ? ['BACKPACK', 'WATER', 'LANYARD', 'BLANKET', 'TRY_AGAIN']
-        : ['BACKPACK', 'WATER', 'LANYARD', 'TRY_AGAIN']
-
-    const normalized = (weights || [])
-      .map((r: any) => ({ prize_key: r.prize_key as PrizeKey, weight: Number(r.weight || 0) }))
-      .filter(r => allowed.includes(r.prize_key))
-
-    // 5) Determinar premio
-    let result: PrizeKey = 'TRY_AGAIN'
-
-    // Si está activa la ventana de mochila:
-    if (releaseRow?.is_enabled && (releaseRow.remaining_spins ?? 0) > 0) {
-      const remaining = Number(releaseRow.remaining_spins)
-
-      if (remaining <= 1) {
-        result = 'BACKPACK'
-        // cerrar ventana
-        await supabase
-          .from('release_window')
-          .update({
-            is_enabled: false,
-            remaining_spins: 0,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('campaign_id', CAMPAIGN_ID)
-      } else {
-        // decrementa y en esta jugada NO fuerza mochila
-        await supabase
-          .from('release_window')
-          .update({
-            remaining_spins: remaining - 1,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('campaign_id', CAMPAIGN_ID)
-
-        // sorteo excluyendo BACKPACK
-        const noBackpack = normalized.filter(n => n.prize_key !== 'BACKPACK')
-        result = pickWeighted(noBackpack.length ? noBackpack : [{ prize_key: 'TRY_AGAIN', weight: 1 }])
-      }
-    } else {
-      // sorteo normal
-      result = pickWeighted(normalized.length ? normalized : [{ prize_key: 'TRY_AGAIN', weight: 1 }])
-    }
-
-    // 6) Registrar jugada
-    const { error: playErr } = await supabase.from('plays').insert({
-      campaign_id: CAMPAIGN_ID,
-      email: cleanEmail,
-      name: cleanName,
-      game_type: gt,
-      result,
-    })
-
-    if (playErr) {
-      // UNIQUE VIOLATION (ya participó)
-      if (playErr.code === '23505') {
-        return NextResponse.json(
-          {
-            ok: false,
-            reason: 'ALREADY_PLAYED',
-            message: 'Ya participaste en esta campaña. ¡Gracias por jugar!',
-          },
-          { status: 200 }
-        )
-      }
-
-      return NextResponse.json({ ok: false, error: playErr.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true, result })
+    const data = await playGame({ name, email, gameType })
+    return NextResponse.json(data)
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? 'Error' }, { status: 500 })
+    return NextResponse.json({ ok: false, error: e?.message ?? 'Error inesperado' }, { status: 500 })
   }
 }
